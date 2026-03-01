@@ -73,9 +73,9 @@ Skills are automatically invoked when you ask Claude to:
 - "create a prd", "write prd for", "plan this feature"
 - "convert this prd", "turn into ralph format", "create prd.json"
 
-### Configure Amp auto-handoff (recommended)
+### Configure auto-handoff (recommended)
 
-Add to `~/.config/amp/settings.json`:
+**For Amp:** Add to `~/.config/amp/settings.json`:
 
 ```json
 {
@@ -83,7 +83,22 @@ Add to `~/.config/amp/settings.json`:
 }
 ```
 
-This enables automatic handoff when context fills up, allowing Ralph to handle large stories that exceed a single context window.
+**For Claude Code:** Copy the auto-handoff hooks to your project:
+
+```bash
+# Copy hooks to your project
+mkdir -p .claude/hooks/auto-handoff
+cp /path/to/ralph/.claude/hooks/auto-handoff/*.mjs .claude/hooks/auto-handoff/
+cp /path/to/ralph/.claude/settings.json .claude/settings.json
+```
+
+Or use the `--auto-handoff` flag when running Ralph:
+
+```bash
+./scripts/ralph/ralph.sh --tool claude --auto-handoff [max_iterations]
+```
+
+This enables automatic context saving before compaction and context recovery after compaction, preventing loss of important context when working on large stories.
 
 ## Workflow
 
@@ -142,6 +157,8 @@ Ralph will:
 | `skills/prd/` | Skill for generating PRDs (works with Amp and Claude Code) |
 | `skills/ralph/` | Skill for converting PRDs to JSON (works with Amp and Claude Code) |
 | `.claude-plugin/` | Plugin manifest for Claude Code marketplace discovery |
+| `.claude/hooks/auto-handoff/` | Auto-handoff hooks for Claude Code context management |
+| `.claude/settings.json` | Claude Code hooks configuration for auto-handoff |
 | `flowchart/` | Interactive visualization of how Ralph works |
 
 ## Flowchart
@@ -227,6 +244,60 @@ After copying `prompt.md` (for Amp) or `CLAUDE.md` (for Claude Code) to your pro
 - Add project-specific quality check commands
 - Include codebase conventions
 - Add common gotchas for your stack
+
+## Auto-Handoff (Claude Code)
+
+When working on large stories, Claude Code may run out of context and trigger **compaction** — a lossy summarization that can lose important decisions, patterns, and progress details.
+
+The auto-handoff system prevents this by:
+
+1. **PreCompact Hook** — Fires before compaction occurs. Parses the full transcript and saves a structured handoff document with: current task, files changed, commands run, errors encountered, and progress notes.
+
+2. **SessionStart Hook** — Fires when the session restarts after compaction. Loads the saved handoff document and injects it as context, so Claude picks up exactly where it left off.
+
+3. **Stop Hook** — Fires when Claude finishes responding. Saves a checkpoint handoff for the next Ralph iteration.
+
+### How it works
+
+```
+[Claude working on story] → [Context fills up] → [PreCompact hook saves state]
+    → [Compaction occurs] → [SessionStart hook restores state] → [Claude continues]
+```
+
+### Handoff document format
+
+The saved handoff includes:
+- Current story ID, title, and acceptance criteria
+- Files created and modified
+- Recent bash commands executed
+- Errors encountered and resolutions
+- TODO list progress
+- Last assistant progress notes
+- Relevant entries from `progress.txt`
+
+### Configuration
+
+The hooks are configured in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreCompact": [{ "matcher": "auto", "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/auto-handoff/precompact-save.mjs\"", "async": true }] }],
+    "SessionStart": [{ "matcher": "compact", "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/auto-handoff/session-restore.mjs\"" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/auto-handoff/stop-handoff.mjs\"" }] }]
+  }
+}
+```
+
+### Comparison with Amp autoHandoff
+
+| Aspect | Amp `autoHandoff` | Claude Code auto-handoff |
+|--------|-------------------|--------------------------|
+| Trigger | Context % threshold | PreCompact hook (before compaction) |
+| Context saving | Internal to Amp | External scripts via hooks |
+| Context recovery | New thread with context | SessionStart hook injection |
+| Configuration | One line in settings | Hooks + scripts |
+| Customization | Limited | Fully customizable |
 
 ## Archiving
 

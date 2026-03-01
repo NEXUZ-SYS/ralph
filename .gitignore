@@ -2,6 +2,7 @@
 prd.json
 progress.txt
 .last-branch
+plan.md
 
 # Archive is optional to commit
 # archive/
@@ -9,5 +10,11 @@ progress.txt
 # OS files
 .DS_Store
 
-#Claude
-.claude/
+# Handoff documents (generated during runs)
+handoff/
+
+# Claude Code (ignore generated files, keep hooks and settings)
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+.claude/settings.local.json
