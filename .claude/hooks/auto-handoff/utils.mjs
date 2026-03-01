@@ -6,7 +6,7 @@
  * and formatting handoff documents for context recovery.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, symlinkSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 
 /**
@@ -371,6 +371,12 @@ function cleanupOldHandoffs(dir, keep) {
  */
 export function readStdin() {
   return new Promise((resolve) => {
+    // Handle case where stdin is already closed
+    if (process.stdin.readableEnded) {
+      resolve({});
+      return;
+    }
+
     let data = '';
     process.stdin.setEncoding('utf-8');
     process.stdin.on('data', chunk => { data += chunk; });
@@ -381,13 +387,8 @@ export function readStdin() {
         resolve({});
       }
     });
-    // Handle case where stdin is already closed
-    if (process.stdin.readableEnded) {
-      try {
-        resolve(JSON.parse(data));
-      } catch {
-        resolve({});
-      }
-    }
+    process.stdin.on('error', () => {
+      resolve({});
+    });
   });
 }

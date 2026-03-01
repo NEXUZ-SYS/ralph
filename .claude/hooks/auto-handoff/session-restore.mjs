@@ -20,15 +20,9 @@ import {
 } from './utils.mjs';
 
 async function main() {
-  const input = await readStdin();
+  await readStdin();
 
-  const { source } = input;
-
-  // Only restore on compaction events
-  if (source !== 'compact') {
-    process.exit(0);
-  }
-
+  // Matcher "compact" in settings.json ensures this hook only fires after compaction.
   try {
     const handoff = loadLatestHandoff();
 
